@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/arqut/common/system"
+	"github.com/arqut/common/types"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/tphan267/common/system"
-	"github.com/tphan267/common/types"
 )
 
 func GenerateToken(data types.Map) (string, error) {

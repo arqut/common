@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tphan267/common/system"
-	"github.com/tphan267/common/utils"
+	"github.com/arqut/common/system"
+	"github.com/arqut/common/utils"
 	"gopkg.in/gomail.v2"
 )
 

@@ -3,8 +3,8 @@ package database
 import (
 	"fmt"
 
+	"github.com/arqut/common/system"
 	"github.com/redis/go-redis/v9"
-	"github.com/tphan267/common/system"
 )
 
 var (

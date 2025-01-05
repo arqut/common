@@ -6,7 +6,7 @@ import (
 	"io"
 	netHttp "net/http"
 
-	"github.com/tphan267/common/system"
+	"github.com/arqut/common/system"
 )
 
 func Get(url string, out interface{}, headers ...string) (err error) {

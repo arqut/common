@@ -1,4 +1,4 @@
-module github.com/tphan267/common
+module github.com/arqut/common
 
 go 1.23.4
 

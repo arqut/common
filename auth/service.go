@@ -3,8 +3,8 @@ package auth
 import (
 	"errors"
 
-	"github.com/tphan267/common/http"
-	"github.com/tphan267/common/system"
+	"github.com/arqut/common/http"
+	"github.com/arqut/common/system"
 )
 
 func RefreshToken(token string) (string, error) {

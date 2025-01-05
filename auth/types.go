@@ -1,8 +1,8 @@
 package auth
 
 import (
-	"github.com/tphan267/common/api"
-	"github.com/tphan267/common/types"
+	"github.com/arqut/common/api"
+	"github.com/arqut/common/types"
 )
 
 type Account struct {
