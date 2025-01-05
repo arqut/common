@@ -3,8 +3,8 @@ package database
 import (
 	"math"
 
+	"github.com/arqut/common/api"
 	"github.com/gofiber/fiber/v2"
-	"github.com/tphan267/common/api"
 	"gorm.io/gorm"
 )
 

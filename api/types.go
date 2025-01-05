@@ -3,7 +3,7 @@ package api
 import (
 	"time"
 
-	"github.com/tphan267/common/types"
+	"github.com/arqut/common/types"
 )
 
 type Map types.Map

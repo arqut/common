@@ -1,6 +1,6 @@
 package utils
 
-import "github.com/tphan267/common/types"
+import "github.com/arqut/common/types"
 
 func MapVal(m types.Map, key string, def ...interface{}) interface{} {
 	val, ok := m[key]
