@@ -9,10 +9,15 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-func GenerateToken(data types.Map) (string, error) {
-	du, _ := time.ParseDuration(system.Env("JWT_DURATION", "2h"))
+func GenerateToken(data types.Map, expiration ...time.Duration) (string, error) {
+	var duration time.Duration
+	if len(expiration) > 0 {
+		duration = expiration[0]
+	} else {
+		duration, _ = time.ParseDuration(system.Env("JWT_DURATION", "2h"))
+	}
 	data["iat"] = jwt.NewNumericDate(time.Now())
-	data["exp"] = jwt.NewNumericDate(time.Now().Add(du))
+	data["exp"] = jwt.NewNumericDate(time.Now().Add(duration))
 
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims(data))
 	token, err := t.SignedString([]byte(system.Env("JWT_SECRET")))
