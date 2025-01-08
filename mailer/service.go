@@ -20,7 +20,7 @@ func Init() {
 	Supporter = system.Env("MAILER_SUPPORTER", "Tuan Phan <peter.phan07@gmail.com>")
 	DefaultSender = system.Env("MAILER_SENDER", "Arqut <info@semilimes.com>")
 	port, _ := strconv.Atoi(system.Env("SMTP_PORT"))
-	dialer := gomail.NewDialer(system.Env("SMTP_HOST"), port, system.Env("SMTP_USER"), system.Env("SMTP_PASS"))
+	dialer = gomail.NewDialer(system.Env("SMTP_HOST"), port, system.Env("SMTP_USER"), system.Env("SMTP_PASS"))
 	dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true}
 }
 
