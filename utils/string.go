@@ -14,17 +14,23 @@ const (
 	alphabets = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 )
 
-func GenerateID() (string, error) {
-	id := make([]byte, idLength)
+func GenerateRandomString(length int) (string, error) {
+	id := make([]byte, length)
+
 	// Generate prefix
-	for i := 0; i < idLength; i++ {
+	for i := 0; i < length; i++ {
 		char, err := rand.Int(rand.Reader, big.NewInt(int64(len(alphabets))))
 		if err != nil {
 			return "", err
 		}
 		id[i] = alphabets[char.Int64()]
 	}
+
 	return string(id), nil
+}
+
+func GenerateID() (string, error) {
+	return GenerateRandomString(idLength)
 }
 
 func StringToInt(val string) int {
