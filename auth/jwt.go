@@ -16,6 +16,8 @@ func GenerateToken(data types.Map, expiration ...time.Duration) (string, error) 
 	} else {
 		duration, _ = time.ParseDuration(system.Env("JWT_DURATION", "2h"))
 	}
+
+
 	data["iat"] = jwt.NewNumericDate(time.Now())
 	data["exp"] = jwt.NewNumericDate(time.Now().Add(duration))
 
