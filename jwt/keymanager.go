@@ -1,6 +1,7 @@
 package jwt
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -8,9 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lestrrat-go/jwx/v3/jwe"
+	"github.com/gofiber/fiber/v2"
 	"github.com/lestrrat-go/jwx/v3/jwa"
+	"github.com/lestrrat-go/jwx/v3/jwe"
 	"golang.org/x/crypto/hkdf"
+
+	"github.com/arqut/common/system"
 )
 
 type JWEOptions struct {
@@ -25,18 +29,76 @@ type KeyManager struct {
 	mu             sync.RWMutex
 	store          KeyStore
 	validationOnly bool
+	ctx            context.Context
+	cancel         context.CancelFunc
 }
 
+type KeyResponse struct {
+	ID     uint      `json:"id,omitempty"` // Omit if not using GormKeyStore
+	Key    string    `json:"key"`          // Base64 encoded key
+	Info   string    `json:"info"`         // Base64 encoded info
+	Expiry time.Time `json:"expiry"`       // Expiration time
+}
+
+func WithKeyManager(keyManager *KeyManager, handler func(*fiber.Ctx, *KeyManager) error) func(c *fiber.Ctx) error {
+	return func(c *fiber.Ctx) error {
+		return handler(c, keyManager)
+	}
+}
 // NewIssuerKeyManager creates a new KeyManager in issuer & validation mode.
 func NewIssuerKeyManager(rotationPeriod time.Duration, store KeyStore) (*KeyManager, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	km := &KeyManager{
 		rotationPeriod: rotationPeriod,
 		store:          store,
 		validationOnly: false,
+		ctx:            ctx,
+		cancel:         cancel,
 	}
-	if err := km.rotateKey(); err != nil {
-		return nil, fmt.Errorf("failed to initialize key manager: %v", err)
+
+	// Fetch all existing keys from the store
+	keys, err := store.GetAllKeys()
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve keys from store: %v", err)
 	}
+
+	if len(keys) > 0 {
+		// Set the most recent key as the current key
+		km.currentKey = keys[len(keys)-1]
+		if len(keys) > 1 {
+			km.keyHistory = keys[:len(keys)-1]
+		}
+
+		if len(keys) > 1 {
+            // Determine the start index to keep only the last three keys
+            start := 0
+            if len(keys) - 1 > 2 {
+                start = len(keys) - 1 - 2
+            }
+            km.keyHistory = keys[start : len(keys)-1]
+        }
+
+		// Check if the current key is nearing expiration
+		timeUntilExpiry := time.Until(km.currentKey.Expiry)
+		// Define a threshold for rotation, e.g., rotate 10% before expiry
+		rotationThreshold := time.Duration(float64(km.rotationPeriod) * 0.1)
+		system.Logger.Info("Check if rotating key is required...")
+		if timeUntilExpiry <= rotationThreshold {
+			system.Logger.Info("Current key is nearing expiration. Rotating key...")
+			if err := km.rotateKey(); err != nil {
+				return nil, fmt.Errorf("failed to rotate key: %v", err)
+			}
+		}
+	} else {
+		// No existing keys found; generate an initial key
+		system.Logger.Info("No existing keys found. Generating initial key...")
+		if err := km.rotateKey(); err != nil {
+			return nil, fmt.Errorf("failed to initialize key manager: %v", err)
+		}
+	}
+
+	go km.startKeyRotation()
+
 	return km, nil
 }
 
@@ -48,13 +110,22 @@ func NewValidationKeyManager(store KeyStore) (*KeyManager, error) {
 		validationOnly: true,
 	}
 
-	keys, err := store.GetAllKeys()
+	err := km.RefreshKeys()
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve keys from store: %v", err)
+		return nil, err
+	}
+
+	return km, nil
+}
+
+func (km *KeyManager) RefreshKeys() error {
+	keys, err := km.store.GetAllKeys()
+	if err != nil {
+		return fmt.Errorf("failed to retrieve keys from store: %v", err)
 	}
 
 	if len(keys) == 0 {
-		return nil, fmt.Errorf("no keys available in store for validation")
+		return fmt.Errorf("no keys available in store for validation")
 	}
 
 	km.currentKey = keys[0]
@@ -62,7 +133,7 @@ func NewValidationKeyManager(store KeyStore) (*KeyManager, error) {
 		km.keyHistory = keys[1:]
 	}
 
-	return km, nil
+	return nil
 }
 
 func (km *KeyManager) rotateKey() error {
@@ -83,6 +154,9 @@ func (km *KeyManager) rotateKey() error {
 
 	if km.currentKey.Key != nil {
 		km.keyHistory = append(km.keyHistory, km.currentKey)
+		if len(km.keyHistory) > 3 {
+			km.keyHistory = km.keyHistory[1:len(km.keyHistory)]
+		}
 	}
 
 	km.currentKey = KeyEntry{
@@ -96,6 +170,75 @@ func (km *KeyManager) rotateKey() error {
 	}
 
 	return nil
+}
+
+func (km *KeyManager) startKeyRotation() {
+	ticker := time.NewTicker(km.rotationPeriod)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := km.rotateKey(); err != nil {
+				system.Logger.Errorf("Error rotating key: %v", err)
+			} else {
+				system.Logger.Infof("Key rotated successfully.")
+			}
+		case <-km.ctx.Done():
+			system.Logger.Infof("Key rotation goroutine shutting down.")
+			return
+		}
+	}
+}
+
+func (km *KeyManager) GetCurrentKeys() ([]KeyEntry, error) {
+	km.mu.RLock()
+	defer km.mu.RUnlock()
+
+	var currentKeys []KeyEntry
+
+	// Start with the current key
+	currentKeys = append(currentKeys, km.currentKey)
+
+	// Determine how many historical keys to include
+	historyCount := 2 // since we already have the current key
+	if len(km.keyHistory) < historyCount {
+		historyCount = len(km.keyHistory)
+	}
+
+	// Append the required number of historical keys
+	if historyCount > 0 {
+		currentKeys = append(currentKeys, km.keyHistory[len(km.keyHistory)-historyCount:]...)
+	}
+
+	return currentKeys, nil
+}
+
+func (km *KeyManager) GetCurrentKeysAPIHandler(c *fiber.Ctx) error {
+	keys, err := km.GetCurrentKeys()
+	if err != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "Access denied",
+		})
+	}
+
+	var response []KeyResponse
+	for _, key := range keys {
+		kr := KeyResponse{
+			Expiry: key.Expiry,
+			Key:    base64.StdEncoding.EncodeToString(key.Key),
+			Info:   base64.StdEncoding.EncodeToString(key.Info),
+		}
+
+		// Include ID only if it's set (useful for GormKeyStore)
+		if key.ID != 0 {
+			kr.ID = key.ID
+		}
+
+		response = append(response, kr)
+	}
+
+	return c.JSON(response)
 }
 
 func generateSalt() ([]byte, error) {
@@ -113,6 +256,10 @@ func deriveKey(masterKey, salt, info []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to derive key: %v", err)
 	}
 	return derivedKey, nil
+}
+
+func (km *KeyManager) Shutdown() {
+	km.cancel()
 }
 
 func (km *KeyManager) IssueJWE(payload []byte, opts *JWEOptions) ([]byte, error) {

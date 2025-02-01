@@ -1,15 +1,17 @@
 package auth
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	commonJWT "github.com/arqut/common/jwt"
 	"github.com/arqut/common/system"
 	"github.com/arqut/common/types"
-	"github.com/golang-jwt/jwt/v4"
 )
 
-func GenerateToken(data types.Map, expiration ...time.Duration) (string, error) {
+func GenerateToken(keyManager *commonJWT.KeyManager, data types.Map, expiration ...time.Duration) (*string, error) {
 	var duration time.Duration
 	if len(expiration) > 0 {
 		duration = expiration[0]
@@ -18,33 +20,45 @@ func GenerateToken(data types.Map, expiration ...time.Duration) (string, error) 
 	}
 
 
-	data["iat"] = jwt.NewNumericDate(time.Now())
-	data["exp"] = jwt.NewNumericDate(time.Now().Add(duration))
-
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims(data))
-	token, err := t.SignedString([]byte(system.Env("JWT_SECRET")))
-	if err != nil {
-		return "", err
-	}
-
-	return token, nil
-}
-
-func ParseToken(token string) (types.Map, error) {
-	t, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
-		return []byte(system.Env("JWT_SECRET")), nil
-	})
+	mashalled_data, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
 
-	claims, ok := t.Claims.(jwt.MapClaims)
-	if !ok || !t.Valid {
-		return nil, fmt.Errorf("token is invalid or expired")
+	jweOptions := &commonJWT.JWEOptions{
+		ExpiresIn: duration,
+		Headers: map[string]interface{}{
+			"custom-header": "custom-value",
+		},
 	}
 
-	return types.Map(claims), nil
+	token, err := keyManager.IssueJWE(mashalled_data, jweOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenStr := string(token)
+	return &tokenStr, nil
+}
+
+func ParseToken(keyManager *commonJWT.KeyManager, token string) (*types.Map, error) {
+	decrypted, err := keyManager.DecryptJWE([]byte(token))
+	if err != nil {
+		keyManager.RefreshKeys()
+		decrypted, err = keyManager.DecryptJWE([]byte(token))
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt token: %w", err)
+		}
+	}
+
+	dec := json.NewDecoder(bytes.NewReader(decrypted))
+
+	var data types.Map
+
+	// Decode the JSON into the types.Map
+	if err := dec.Decode(&data); err != nil {
+		return nil, fmt.Errorf("failed to decode token payload: %w", err)
+	}
+
+	return &data, nil
 }

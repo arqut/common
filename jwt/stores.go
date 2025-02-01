@@ -1,6 +1,12 @@
 package jwt
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -46,6 +52,9 @@ func (s *InMemoryKeyStore) GetAllKeys() ([]KeyEntry, error) {
 	defer s.mu.RUnlock()
 	copied := make([]KeyEntry, len(s.keys))
 	copy(copied, s.keys)
+	sort.Slice(copied[:], func(i, j int) bool {
+		return copied[i].Expiry.Before(copied[j].Expiry)
+	})
 	return copied, nil
 }
 
@@ -68,6 +77,103 @@ func (s *GormKeyStore) SaveKey(entry KeyEntry) error {
 // GetAllKeys retrieves all saved key entries using GORM.
 func (s *GormKeyStore) GetAllKeys() ([]KeyEntry, error) {
 	var keys []KeyEntry
-	err := s.db.Find(&keys).Error
+	err := s.db.Order("expiry ASC").Find(&keys).Error
 	return keys, err
+}
+
+
+type RemoteStore struct {
+    remoteURL string
+    client    *http.Client
+
+    cache     []KeyEntry
+    cacheMu   sync.RWMutex
+    cacheTTL  time.Duration
+    lastFetch time.Time
+}
+
+// NewRemoteStore initializes a new RemoteStore.
+// - remoteURL: The HTTP endpoint to fetch keys from.
+// - cacheTTL: Duration to keep the cached keys before refreshing.
+func NewRemoteStore(remoteURL string, cacheTTL time.Duration) *RemoteStore {
+    return &RemoteStore{
+        remoteURL: remoteURL,
+        client: &http.Client{
+            Timeout: 10 * time.Second, // Adjust as needed
+        },
+        cacheTTL: cacheTTL,
+    }
+}
+
+// SaveKey is not supported for RemoteStore as it's intended for fetching keys.
+// If your remote service supports key creation, implement this method accordingly.
+func (rs *RemoteStore) SaveKey(entry KeyEntry) error {
+    return fmt.Errorf("SaveKey is not supported by RemoteStore")
+}
+
+// GetAllKeys retrieves all keys from the remote service or from the cache if valid.
+func (rs *RemoteStore) GetAllKeys() ([]KeyEntry, error) {
+    rs.cacheMu.RLock()
+    if time.Since(rs.lastFetch) < rs.cacheTTL && rs.cache != nil {
+        // Return cached keys
+        keysCopy := make([]KeyEntry, len(rs.cache))
+        copy(keysCopy, rs.cache)
+        rs.cacheMu.RUnlock()
+        return keysCopy, nil
+    }
+    rs.cacheMu.RUnlock()
+
+    // Fetch keys from remote service
+    resp, err := rs.client.Get(rs.remoteURL)
+    if err != nil {
+        return nil, fmt.Errorf("failed to fetch keys from remote service: %v", err)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusOK {
+        bodyBytes, _ := io.ReadAll(resp.Body)
+        return nil, fmt.Errorf("remote service returned status %d: %s", resp.StatusCode, string(bodyBytes))
+    }
+
+    bodyBytes, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read response body: %v", err)
+    }
+
+    var keyResponses []KeyResponse
+    if err := json.Unmarshal(bodyBytes, &keyResponses); err != nil {
+        return nil, fmt.Errorf("failed to parse JSON response: %v", err)
+    }
+
+    // Convert KeyResponse to KeyEntry
+    var fetchedKeys []KeyEntry
+    for _, kr := range keyResponses {
+        keyBytes, err := base64.StdEncoding.DecodeString(kr.Key)
+        if err != nil {
+            return nil, fmt.Errorf("failed to decode key: %v", err)
+        }
+
+        infoBytes, err := base64.StdEncoding.DecodeString(kr.Info)
+        if err != nil {
+            return nil, fmt.Errorf("failed to decode info: %v", err)
+        }
+
+        fetchedKeys = append(fetchedKeys, KeyEntry{
+            ID:     kr.ID,
+            Key:    keyBytes,
+            Info:   infoBytes,
+            Expiry: kr.Expiry,
+        })
+    }
+
+    // Update cache
+    rs.cacheMu.Lock()
+    rs.cache = fetchedKeys
+    rs.lastFetch = time.Now()
+    rs.cacheMu.Unlock()
+
+    // Return a copy of the fetched keys
+    keysCopy := make([]KeyEntry, len(fetchedKeys))
+    copy(keysCopy, fetchedKeys)
+    return keysCopy, nil
 }
