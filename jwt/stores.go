@@ -15,7 +15,7 @@ import (
 
 // KeyEntry represents an encryption key with associated metadata.
 type KeyEntry struct {
-	ID     uint      `gorm:"primaryKey"` // For GORM
+	ID     uint `gorm:"primaryKey"` // For GORM
 	Key    []byte
 	Info   []byte
 	Expiry time.Time
@@ -81,99 +81,108 @@ func (s *GormKeyStore) GetAllKeys() ([]KeyEntry, error) {
 	return keys, err
 }
 
-
 type RemoteStore struct {
-    remoteURL string
-    client    *http.Client
+	remoteURL string
+	apiKey    string
+	client    *http.Client
 
-    cache     []KeyEntry
-    cacheMu   sync.RWMutex
-    cacheTTL  time.Duration
-    lastFetch time.Time
+	cache     []KeyEntry
+	cacheMu   sync.RWMutex
+	cacheTTL  time.Duration
+	lastFetch time.Time
 }
 
 // NewRemoteStore initializes a new RemoteStore.
 // - remoteURL: The HTTP endpoint to fetch keys from.
 // - cacheTTL: Duration to keep the cached keys before refreshing.
-func NewRemoteStore(remoteURL string, cacheTTL time.Duration) *RemoteStore {
-    return &RemoteStore{
-        remoteURL: remoteURL,
-        client: &http.Client{
-            Timeout: 10 * time.Second, // Adjust as needed
-        },
-        cacheTTL: cacheTTL,
-    }
+func NewRemoteStore(remoteURL string, apiKey string, cacheTTL time.Duration) *RemoteStore {
+	return &RemoteStore{
+		remoteURL: remoteURL,
+		apiKey:    apiKey,
+		client: &http.Client{
+			Timeout: 10 * time.Second, // Adjust as needed
+		},
+		cacheTTL: cacheTTL,
+	}
 }
 
 // SaveKey is not supported for RemoteStore as it's intended for fetching keys.
 // If your remote service supports key creation, implement this method accordingly.
 func (rs *RemoteStore) SaveKey(entry KeyEntry) error {
-    return fmt.Errorf("SaveKey is not supported by RemoteStore")
+	return fmt.Errorf("SaveKey is not supported by RemoteStore")
 }
 
 // GetAllKeys retrieves all keys from the remote service or from the cache if valid.
 func (rs *RemoteStore) GetAllKeys() ([]KeyEntry, error) {
-    rs.cacheMu.RLock()
-    if time.Since(rs.lastFetch) < rs.cacheTTL && rs.cache != nil {
-        // Return cached keys
-        keysCopy := make([]KeyEntry, len(rs.cache))
-        copy(keysCopy, rs.cache)
-        rs.cacheMu.RUnlock()
-        return keysCopy, nil
-    }
-    rs.cacheMu.RUnlock()
+	rs.cacheMu.RLock()
+	if time.Since(rs.lastFetch) < rs.cacheTTL && rs.cache != nil {
+		// Return cached keys
+		keysCopy := make([]KeyEntry, len(rs.cache))
+		copy(keysCopy, rs.cache)
+		rs.cacheMu.RUnlock()
+		return keysCopy, nil
+	}
+	rs.cacheMu.RUnlock()
 
-    // Fetch keys from remote service
-    resp, err := rs.client.Get(rs.remoteURL)
+	// Fetch keys from remote service
+    // Create a new request to allow setting the Authorization header
+    req, err := http.NewRequest("GET", rs.remoteURL, nil)
     if err != nil {
-        return nil, fmt.Errorf("failed to fetch keys from remote service: %v", err)
+        return nil, fmt.Errorf("failed to create new request: %v", err)
     }
-    defer resp.Body.Close()
+    // Set the API key as a Bearer token in the Authorization header
+    req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rs.apiKey))
 
-    if resp.StatusCode != http.StatusOK {
-        bodyBytes, _ := io.ReadAll(resp.Body)
-        return nil, fmt.Errorf("remote service returned status %d: %s", resp.StatusCode, string(bodyBytes))
-    }
+	resp, err := rs.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch keys from remote service: %v", err)
+	}
+	defer resp.Body.Close()
 
-    bodyBytes, err := io.ReadAll(resp.Body)
-    if err != nil {
-        return nil, fmt.Errorf("failed to read response body: %v", err)
-    }
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("remote service returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
 
-    var keyResponses []KeyResponse
-    if err := json.Unmarshal(bodyBytes, &keyResponses); err != nil {
-        return nil, fmt.Errorf("failed to parse JSON response: %v", err)
-    }
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
 
-    // Convert KeyResponse to KeyEntry
-    var fetchedKeys []KeyEntry
-    for _, kr := range keyResponses {
-        keyBytes, err := base64.StdEncoding.DecodeString(kr.Key)
-        if err != nil {
-            return nil, fmt.Errorf("failed to decode key: %v", err)
-        }
+	var keyResponses []KeyResponse
+	if err := json.Unmarshal(bodyBytes, &keyResponses); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON response: %v", err)
+	}
 
-        infoBytes, err := base64.StdEncoding.DecodeString(kr.Info)
-        if err != nil {
-            return nil, fmt.Errorf("failed to decode info: %v", err)
-        }
+	// Convert KeyResponse to KeyEntry
+	var fetchedKeys []KeyEntry
+	for _, kr := range keyResponses {
+		keyBytes, err := base64.StdEncoding.DecodeString(kr.Key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode key: %v", err)
+		}
 
-        fetchedKeys = append(fetchedKeys, KeyEntry{
-            ID:     kr.ID,
-            Key:    keyBytes,
-            Info:   infoBytes,
-            Expiry: kr.Expiry,
-        })
-    }
+		infoBytes, err := base64.StdEncoding.DecodeString(kr.Info)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode info: %v", err)
+		}
 
-    // Update cache
-    rs.cacheMu.Lock()
-    rs.cache = fetchedKeys
-    rs.lastFetch = time.Now()
-    rs.cacheMu.Unlock()
+		fetchedKeys = append(fetchedKeys, KeyEntry{
+			ID:     kr.ID,
+			Key:    keyBytes,
+			Info:   infoBytes,
+			Expiry: kr.Expiry,
+		})
+	}
 
-    // Return a copy of the fetched keys
-    keysCopy := make([]KeyEntry, len(fetchedKeys))
-    copy(keysCopy, fetchedKeys)
-    return keysCopy, nil
+	// Update cache
+	rs.cacheMu.Lock()
+	rs.cache = fetchedKeys
+	rs.lastFetch = time.Now()
+	rs.cacheMu.Unlock()
+
+	// Return a copy of the fetched keys
+	keysCopy := make([]KeyEntry, len(fetchedKeys))
+	copy(keysCopy, fetchedKeys)
+	return keysCopy, nil
 }

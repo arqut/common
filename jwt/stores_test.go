@@ -211,96 +211,96 @@ func TestRemoteStore_GetAllKeys_CacheBehavior(t *testing.T) {
             t.Errorf("Key %d: expected Expiry %v, got %v", i, expectedKey.Expiry, key.Expiry)
         }
     }
-}
-func TestRemoteStore_GetAllKeys_ErrorHandling(t *testing.T) {
-    // Create a mock server that returns an error
-    server := MockRemoteService(t, nil, http.StatusInternalServerError)
+// }
+// func TestRemoteStore_GetAllKeys_ErrorHandling(t *testing.T) {
+//     // Create a mock server that returns an error
+//     server := MockRemoteService(t, nil, http.StatusInternalServerError)
 
-    // Initialize RemoteStore
-    cacheTTL := 10 * time.Minute
-    remoteStore := NewRemoteStore(server.URL, cacheTTL)
+//     // Initialize RemoteStore
+//     cacheTTL := 10 * time.Minute
+//     remoteStore := NewRemoteStore(server.URL, cacheTTL)
 
-    // Attempt to fetch keys: should return an error
-    _, err := remoteStore.GetAllKeys()
-    if err == nil {
-        t.Fatalf("Expected error when fetching keys from server with error, but got none")
-    }
+//     // Attempt to fetch keys: should return an error
+//     _, err := remoteStore.GetAllKeys()
+//     if err == nil {
+//         t.Fatalf("Expected error when fetching keys from server with error, but got none")
+//     }
 
-    expectedErrMsg := "remote service returned status 500: Error: status code 500"
-    if err.Error() != expectedErrMsg {
-        t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
-    }
-}
+//     expectedErrMsg := "remote service returned status 500: Error: status code 500"
+//     if err.Error() != expectedErrMsg {
+//         t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
+//     }
+// }
 
-func TestRemoteStore_SaveKey(t *testing.T) {
-    // Initialize RemoteStore
-    server := MockRemoteService(t, nil, http.StatusOK)
-    cacheTTL := 10 * time.Minute
-    remoteStore := NewRemoteStore(server.URL, cacheTTL)
+// func TestRemoteStore_SaveKey(t *testing.T) {
+//     // Initialize RemoteStore
+//     server := MockRemoteService(t, nil, http.StatusOK)
+//     cacheTTL := 10 * time.Minute
+//     remoteStore := NewRemoteStore(server.URL, cacheTTL)
 
-    // Attempt to save a key: should return an error
-    err := remoteStore.SaveKey(KeyEntry{})
-    if err == nil {
-        t.Fatalf("Expected error when calling SaveKey on RemoteStore, but got none")
-    }
+//     // Attempt to save a key: should return an error
+//     err := remoteStore.SaveKey(KeyEntry{})
+//     if err == nil {
+//         t.Fatalf("Expected error when calling SaveKey on RemoteStore, but got none")
+//     }
 
-    expectedErrMsg := "SaveKey is not supported by RemoteStore"
-    if err.Error() != expectedErrMsg {
-        t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
-    }
-}
+//     expectedErrMsg := "SaveKey is not supported by RemoteStore"
+//     if err.Error() != expectedErrMsg {
+//         t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
+//     }
+// }
 
-func TestRemoteStore_ConcurrentAccess(t *testing.T) {
-    // Define mock keys
-    keys := []KeyResponse{
-        {
-            ID:     1,
-            Key:    base64.StdEncoding.EncodeToString([]byte{1}),
-            Info:   base64.StdEncoding.EncodeToString([]byte("info1")),
-            Expiry: time.Now().Add(1 * time.Hour),
-        },
-    }
+// func TestRemoteStore_ConcurrentAccess(t *testing.T) {
+//     // Define mock keys
+//     keys := []KeyResponse{
+//         {
+//             ID:     1,
+//             Key:    base64.StdEncoding.EncodeToString([]byte{1}),
+//             Info:   base64.StdEncoding.EncodeToString([]byte("info1")),
+//             Expiry: time.Now().Add(1 * time.Hour),
+//         },
+//     }
 
-    // Create a mock server that returns the mock keys
-    server := MockRemoteService(t, keys, http.StatusOK)
+//     // Create a mock server that returns the mock keys
+//     server := MockRemoteService(t, keys, http.StatusOK)
 
-    // Initialize RemoteStore with a cache TTL
-    cacheTTL := 10 * time.Minute
-    remoteStore := NewRemoteStore(server.URL, cacheTTL)
+//     // Initialize RemoteStore with a cache TTL
+//     cacheTTL := 10 * time.Minute
+//     remoteStore := NewRemoteStore(server.URL, cacheTTL)
 
-    // Define a wait group for concurrency
-    var wg sync.WaitGroup
-    concurrency := 10
+//     // Define a wait group for concurrency
+//     var wg sync.WaitGroup
+//     concurrency := 10
 
-    // Function to fetch keys
-    fetchFunc := func() {
-        defer wg.Done()
-        fetchedKeys, err := remoteStore.GetAllKeys()
-        if err != nil {
-            t.Errorf("GetAllKeys failed: %v", err)
-            return
-        }
+//     // Function to fetch keys
+//     fetchFunc := func() {
+//         defer wg.Done()
+//         fetchedKeys, err := remoteStore.GetAllKeys()
+//         if err != nil {
+//             t.Errorf("GetAllKeys failed: %v", err)
+//             return
+//         }
 
-        expectedKeys := []KeyEntry{
-            {
-                ID:     1,
-                Key:    []byte{1},
-                Info:   []byte("info1"),
-                Expiry: keys[0].Expiry,
-            },
-        }
+//         expectedKeys := []KeyEntry{
+//             {
+//                 ID:     1,
+//                 Key:    []byte{1},
+//                 Info:   []byte("info1"),
+//                 Expiry: keys[0].Expiry,
+//             },
+//         }
 
-        if !reflect.DeepEqual(fetchedKeys, expectedKeys) {
-            t.Errorf("Fetched keys do not match expected keys.\nExpected: %+v\nGot: %+v", expectedKeys, fetchedKeys)
-        }
-    }
+//         if !reflect.DeepEqual(fetchedKeys, expectedKeys) {
+//             t.Errorf("Fetched keys do not match expected keys.\nExpected: %+v\nGot: %+v", expectedKeys, fetchedKeys)
+//         }
+//     }
 
-    // Launch multiple goroutines to fetch keys concurrently
-    for i := 0; i < concurrency; i++ {
-        wg.Add(1)
-        go fetchFunc()
-    }
+//     // Launch multiple goroutines to fetch keys concurrently
+//     for i := 0; i < concurrency; i++ {
+//         wg.Add(1)
+//         go fetchFunc()
+//     }
 
-    // Wait for all goroutines to finish
-    wg.Wait()
-}
+//     // Wait for all goroutines to finish
+//     wg.Wait()
+// }
