@@ -45,6 +45,7 @@ func WithKeyManager(keyManager *KeyManager, handler func(*fiber.Ctx, *KeyManager
 		return handler(c, keyManager)
 	}
 }
+
 // NewIssuerKeyManager creates a new KeyManager in issuer & validation mode.
 func NewIssuerKeyManager(rotationPeriod time.Duration, store KeyStore) (*KeyManager, error) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -70,13 +71,15 @@ func NewIssuerKeyManager(rotationPeriod time.Duration, store KeyStore) (*KeyMana
 		}
 
 		if len(keys) > 1 {
-            // Determine the start index to keep only the last three keys
-            start := 0
-            if len(keys) - 1 > 2 {
-                start = len(keys) - 1 - 2
-            }
-            km.keyHistory = keys[start : len(keys)-1]
-        }
+			// Determine the start index to keep only the last three keys
+			start := 0
+			if len(keys)-1 > 2 {
+				start = len(keys) - 1 - 2
+			}
+			km.keyHistory = keys[start : len(keys)-1]
+		} else {
+			km.keyHistory = keys
+		}
 
 		// Check if the current key is nearing expiration
 		timeUntilExpiry := time.Until(km.currentKey.Expiry)

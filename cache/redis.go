@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/arqut/common/system"
+	"github.com/arqut/common/utils"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -60,7 +61,7 @@ func GetExpiration(expiration ...time.Duration) time.Duration {
 	}
 
 	if str := system.Env("CACHE_DURATION"); str != "" {
-		if duration, err := time.ParseDuration(str); err == nil {
+		if duration, err := utils.ParseDuration(str); err == nil {
 			return duration
 		}
 	}

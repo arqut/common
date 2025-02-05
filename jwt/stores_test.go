@@ -1,14 +1,11 @@
 package jwt
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -112,106 +109,106 @@ func TestGormKeyStore(t *testing.T) {
 	assert.Equal(t, key2.Key, keys[2].Key, "Key with latest expiry should be third")
 }
 
-
 func MockRemoteService(t *testing.T, keys []KeyResponse, statusCode int) *httptest.Server {
-    handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.WriteHeader(statusCode)
-        if statusCode == http.StatusOK {
-            json.NewEncoder(w).Encode(keys)
-        } else {
-            fmt.Fprintf(w, "Error: status code %d", statusCode)
-        }
-    })
-    server := httptest.NewServer(handler)
-    t.Cleanup(server.Close)
-    return server
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(statusCode)
+		if statusCode == http.StatusOK {
+			json.NewEncoder(w).Encode(keys)
+		} else {
+			fmt.Fprintf(w, "Error: status code %d", statusCode)
+		}
+	})
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	return server
 }
 
 func TestRemoteStore_GetAllKeys_CacheBehavior(t *testing.T) {
-    // Step 1: Initialize an in-memory key store
-    store := NewInMemoryKeyStore()
+	// Step 1: Initialize an in-memory key store
+	store := NewInMemoryKeyStore()
 
-    // Step 2: Insert 6 keys (1 current + 5 historical)
-    totalKeys := 6
-    now := time.Now()
+	// Step 2: Insert 6 keys (1 current + 5 historical)
+	totalKeys := 6
+	now := time.Now()
 
-    for i := 0; i < totalKeys; i++ {
-        key := KeyEntry{
-            Key:    []byte{byte(i + 1)},                     // Simple incremental keys
-            Info:   []byte("info" + strconv.Itoa(i+1)),       // Corrected info strings
-            Expiry: now.Add(time.Duration(i) * time.Hour),     // Increasing expiry times
-        }
-        if err := store.SaveKey(key); err != nil {
-            t.Fatalf("Failed to save key %d: %v", i, err)
-        }
-    }
+	for i := 0; i < totalKeys; i++ {
+		key := KeyEntry{
+			Key:    []byte{byte(i + 1)},                   // Simple incremental keys
+			Info:   []byte("info" + strconv.Itoa(i+1)),    // Corrected info strings
+			Expiry: now.Add(time.Duration(i) * time.Hour), // Increasing expiry times
+		}
+		if err := store.SaveKey(key); err != nil {
+			t.Fatalf("Failed to save key %d: %v", i, err)
+		}
+	}
 
-    // Step 3: Initialize KeyManager with a long rotation period to prevent auto-rotation during test
-    rotationPeriod := 24 * time.Hour
-    km, err := NewIssuerKeyManager(rotationPeriod, store)
-    if err != nil {
-        t.Fatalf("Failed to initialize KeyManager: %v", err)
-    }
-    defer km.Shutdown()
+	// Step 3: Initialize KeyManager with a long rotation period to prevent auto-rotation during test
+	rotationPeriod := 24 * time.Hour
+	km, err := NewIssuerKeyManager(rotationPeriod, store)
+	if err != nil {
+		t.Fatalf("Failed to initialize KeyManager: %v", err)
+	}
+	defer km.Shutdown()
 
-    // Step 4: Invoke GetCurrentKeys
-    keys, err := km.GetCurrentKeys()
-    if err != nil {
-        t.Fatalf("GetCurrentKeys failed: %v", err)
-    }
+	// Step 4: Invoke GetCurrentKeys
+	keys, err := km.GetCurrentKeys()
+	if err != nil {
+		t.Fatalf("GetCurrentKeys failed: %v", err)
+	}
 
-    // Step 5: Assert that exactly 3 keys are returned
-    expectedCount := 3
-    if len(keys) != expectedCount {
-        t.Errorf("Expected %d keys, got %d", expectedCount, len(keys))
-    }
+	// Step 5: Assert that exactly 3 keys are returned
+	expectedCount := 3
+	if len(keys) != expectedCount {
+		t.Errorf("Expected %d keys, got %d", expectedCount, len(keys))
+	}
 
-    // Define the expected keys:
-    // - Current Key: Key6 (last inserted)
-    // - Two most recent historical keys: Key5 and Key4
-    expectedKeys := []KeyEntry{
-        {
-            Key:    []byte{6},           // Key6
-            Info:   []byte("info6"),
-            Expiry: now.Add(5 * time.Hour),
-        },
-        {
-            Key:    []byte{5},           // Key5
-            Info:   []byte("info5"),
-            Expiry: now.Add(4 * time.Hour),
-        },
-        {
-            Key:    []byte{4},           // Key4
-            Info:   []byte("info4"),
-            Expiry: now.Add(3 * time.Hour),
-        },
-    }
+	// Define the expected keys:
+	// - Current Key: Key6 (last inserted)
+	// - Two most recent historical keys: Key5 and Key4
+	expectedKeys := []KeyEntry{
+		{
+			Key:    []byte{6}, // Key6
+			Info:   []byte("info6"),
+			Expiry: now.Add(5 * time.Hour),
+		},
+		{
+			Key:    []byte{5}, // Key5
+			Info:   []byte("info5"),
+			Expiry: now.Add(4 * time.Hour),
+		},
+		{
+			Key:    []byte{4}, // Key4
+			Info:   []byte("info4"),
+			Expiry: now.Add(3 * time.Hour),
+		},
+	}
 
-    // Assert that the returned keys match the expected keys
-    for i, key := range keys {
-        expectedKey := expectedKeys[i]
+	// Assert that the returned keys match the expected keys
+	for i, key := range keys {
+		expectedKey := expectedKeys[i]
 
-        // Compare ID
-        if key.ID != expectedKey.ID {
-            t.Errorf("Key %d: expected ID %d, got %d", i, expectedKey.ID, key.ID)
-        }
+		// Compare ID
+		if key.ID != expectedKey.ID {
+			t.Errorf("Key %d: expected ID %d, got %d", i, expectedKey.ID, key.ID)
+		}
 
-        // Compare Key
-        if string(key.Key) != string(expectedKey.Key) {
-            t.Errorf("Key %d: expected Key %v, got %v", i, expectedKey.Key, key.Key)
-        }
+		// Compare Key
+		if string(key.Key) != string(expectedKey.Key) {
+			t.Errorf("Key %d: expected Key %v, got %v", i, expectedKey.Key, key.Key)
+		}
 
-        // Compare Info
-        if string(key.Info) != string(expectedKey.Info) {
-            t.Errorf("Key %d: expected Info %v, got %v", i, expectedKey.Info, key.Info)
-        }
+		// Compare Info
+		if string(key.Info) != string(expectedKey.Info) {
+			t.Errorf("Key %d: expected Info %v, got %v", i, expectedKey.Info, key.Info)
+		}
 
-        // Compare Expiry using time.Equal to ignore monotonic clock readings
-        if !key.Expiry.Equal(expectedKey.Expiry) {
-            t.Errorf("Key %d: expected Expiry %v, got %v", i, expectedKey.Expiry, key.Expiry)
-        }
-    }
-// }
+		// Compare Expiry using time.Equal to ignore monotonic clock readings
+		if !key.Expiry.Equal(expectedKey.Expiry) {
+			t.Errorf("Key %d: expected Expiry %v, got %v", i, expectedKey.Expiry, key.Expiry)
+		}
+	}
+}
+
 // func TestRemoteStore_GetAllKeys_ErrorHandling(t *testing.T) {
 //     // Create a mock server that returns an error
 //     server := MockRemoteService(t, nil, http.StatusInternalServerError)

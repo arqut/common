@@ -5,7 +5,6 @@ go 1.23.4
 require (
 	github.com/antigloss/go v1.19.3
 	github.com/gofiber/fiber/v2 v2.52.5
-	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/joho/godotenv v1.5.1
 	github.com/lestrrat-go/jwx/v3 v3.0.0-alpha1
 	github.com/redis/go-redis/v9 v9.7.0

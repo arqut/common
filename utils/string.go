@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"regexp"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -39,6 +41,34 @@ func StringToInt(val string) int {
 		return 0
 	}
 	return i
+}
+
+// ToCamelCase
+// This will convert snake case to camelCased
+// @return camelCased string, number of parts
+func ToCamelCase(str string, splitter rune) (string, int) {
+	parts := strings.Split(str, "_")
+	for index := range parts {
+		if index != 0 {
+			parts[index] = strings.Title(strings.ToLower(parts[index]))
+		} else {
+			parts[index] = strings.ToLower(parts[index])
+		}
+	}
+	return strings.Join(parts, ""), len(parts)
+}
+
+// CamelCaseToSnakeCase
+// This will convert camelCase to snake_cased
+// @return snakeCased string, number of parts
+func ToSnakeCase(inputCamelCaseStr string) (string, int) {
+	// Regex from https://www.golangprograms.com/split-a-string-at-uppercase-letters-using-regular-expression-in-golang.html
+	re := regexp.MustCompile(`[A-z][^A-Z]*`)
+	parts := re.FindAllString(inputCamelCaseStr, -1)
+	for index := range parts {
+		parts[index] = strings.ToLower(parts[index])
+	}
+	return strings.Join(parts, "_"), len(parts)
 }
 
 func ToString(data interface{}) string {

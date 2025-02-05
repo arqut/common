@@ -3,12 +3,12 @@ package auth
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/arqut/common/api"
 	"github.com/arqut/common/cache"
 	"github.com/arqut/common/http"
 	"github.com/arqut/common/system"
+	"github.com/arqut/common/utils"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -65,7 +65,7 @@ func RemoteAccount(token string) (act *Account, err error) {
 			return nil, errors.New(resp.Error.Message)
 		}
 		act = resp.Data
-		duration, _ := time.ParseDuration(system.Env("AUTH_CACHE_DURATION", "1h"))
+		duration, _ := utils.ParseDuration(system.Env("AUTH_CACHE_DURATION", "1h"))
 		cache.SetObj(token, act, duration)
 	}
 

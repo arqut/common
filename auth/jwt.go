@@ -9,6 +9,7 @@ import (
 	commonJWT "github.com/arqut/common/jwt"
 	"github.com/arqut/common/system"
 	"github.com/arqut/common/types"
+	"github.com/arqut/common/utils"
 )
 
 func GenerateToken(keyManager *commonJWT.KeyManager, data types.Map, expiration ...time.Duration) (*string, error) {
@@ -16,23 +17,22 @@ func GenerateToken(keyManager *commonJWT.KeyManager, data types.Map, expiration 
 	if len(expiration) > 0 {
 		duration = expiration[0]
 	} else {
-		duration, _ = time.ParseDuration(system.Env("JWT_DURATION", "2h"))
+		duration, _ = utils.ParseDuration(system.Env("JWT_DURATION", "2h"))
 	}
 
-
-	mashalled_data, err := json.Marshal(data)
+	mashalledData, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
 
 	jweOptions := &commonJWT.JWEOptions{
 		ExpiresIn: duration,
-		Headers: map[string]interface{}{
-			"custom-header": "custom-value",
-		},
+		// Headers: map[string]interface{}{
+		// 	"custom-header": "custom-value",
+		// },
 	}
 
-	token, err := keyManager.IssueJWE(mashalled_data, jweOptions)
+	token, err := keyManager.IssueJWE(mashalledData, jweOptions)
 	if err != nil {
 		return nil, err
 	}
