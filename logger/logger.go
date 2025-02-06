@@ -1,4 +1,4 @@
-// package logger
+package logger
 
 // import (
 // 	goLogger "github.com/antigloss/go/logger"
