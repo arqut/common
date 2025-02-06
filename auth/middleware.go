@@ -49,15 +49,15 @@ func remoteMiddleware(extractTokens ...string) fiber.Handler {
 	}
 }
 
-func RemoteAccount(token string) (act *Account, err error) {
-	act = &Account{}
+func RemoteAccount(token string) (act *AuthTokenData, err error) {
+	act = &AuthTokenData{}
 	err = cache.GetObj(token, act)
 
 	if err != nil || act.ID == 0 {
 		system.Logger.Errorf("[common/auth] caching error: %v", err)
 		err = nil
-		resp := &AuthAccountResponse{}
-		err := http.Get(system.Env("AUTH_API")+"/auth/account", resp, "Authorization", "Bearer "+token)
+		resp := &AuthValidateResponse{}
+		err := http.Get(system.Env("AUTH_API")+"/auth/validate", resp, "Authorization", "Bearer "+token)
 		if err != nil {
 			return nil, err
 		}

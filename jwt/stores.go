@@ -77,7 +77,7 @@ func (s *GormKeyStore) SaveKey(entry KeyEntry) error {
 // GetAllKeys retrieves all saved key entries using GORM.
 func (s *GormKeyStore) GetAllKeys() ([]KeyEntry, error) {
 	var keys []KeyEntry
-	err := s.db.Order("expiry ASC").Find(&keys).Error
+	err := s.db.Order("expiry ASC").Limit(3).Find(&keys).Error
 	return keys, err
 }
 
@@ -125,13 +125,13 @@ func (rs *RemoteStore) GetAllKeys() ([]KeyEntry, error) {
 	rs.cacheMu.RUnlock()
 
 	// Fetch keys from remote service
-    // Create a new request to allow setting the Authorization header
-    req, err := http.NewRequest("GET", rs.remoteURL, nil)
-    if err != nil {
-        return nil, fmt.Errorf("failed to create new request: %v", err)
-    }
-    // Set the API key as a Bearer token in the Authorization header
-    req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rs.apiKey))
+	// Create a new request to allow setting the Authorization header
+	req, err := http.NewRequest("GET", rs.remoteURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new request: %v", err)
+	}
+	// Set the API key as a Bearer token in the Authorization header
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rs.apiKey))
 
 	resp, err := rs.client.Do(req)
 	if err != nil {

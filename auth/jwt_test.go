@@ -6,18 +6,16 @@ import (
 	"time"
 
 	commonJWT "github.com/arqut/common/jwt"
-	"github.com/arqut/common/system"
-	"github.com/arqut/common/types"
+	"github.com/arqut/common/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMain(m *testing.M) {
-	// Initialize system.Logger with a simple logger.
+	// Initialize logger with a simple logger.
 	// Adjust the configuration as needed.
 	os.Setenv("SYS_LOG_LEVEL", "INFO")
-	
-	system.InitLogger("test_logger")
+	logger.InitLogger("test_logger")
 
 	// Run the tests.
 	code := m.Run()
@@ -41,10 +39,8 @@ func TestGenerateAndParseToken_Success(t *testing.T) {
 	km := setupKeyManager(t, rotationPeriod)
 
 	// Sample data to encode in the token
-	data := types.Map{
-		"user_id": float64(12345), // Changed from int to float64
-		"role":    "admin",
-		"email":   "user@example.com",
+	data := &AuthTokenData{
+		ID: 0,
 	}
 
 	// Generate the token
@@ -67,9 +63,8 @@ func TestParseToken_Expired(t *testing.T) {
 	km := setupKeyManager(t, rotationPeriod)
 
 	// Sample data to encode in the token
-	data := types.Map{
-		"user_id": float64(67890), // Changed from int to float64
-		"role":    "user",
+	data := &AuthTokenData{
+		ID: 0,
 	}
 
 	// Generate the token with a short expiration time
@@ -105,9 +100,8 @@ func TestParseToken_TamperedToken(t *testing.T) {
 	km := setupKeyManager(t, rotationPeriod)
 
 	// Sample data to encode in the token
-	data := types.Map{
-		"user_id": float64(54321), // Changed from int to float64
-		"role":    "editor",
+	data := &AuthTokenData{
+		ID: 0,
 	}
 
 	// Generate the token
@@ -135,9 +129,8 @@ func TestGenerateToken_CustomExpiration(t *testing.T) {
 	km := setupKeyManager(t, rotationPeriod)
 
 	// Sample data to encode in the token
-	data := types.Map{
-		"session_id": "abc123",
-		"permissions": []interface{}{"read", "write"}, // Changed from []string to []interface{}
+	data := &AuthTokenData{
+		ID: 0,
 	}
 
 	// Custom expiration duration
@@ -163,9 +156,8 @@ func TestGenerateToken_DefaultExpiration(t *testing.T) {
 	km := setupKeyManager(t, rotationPeriod)
 
 	// Sample data to encode in the token
-	data := types.Map{
-		"event": "login",
-		"time":  float64(time.Now().Unix()), // Changed from int64 to float64
+	data := &AuthTokenData{
+		ID: 0,
 	}
 
 	// Generate the token without specifying expiration
@@ -180,4 +172,32 @@ func TestGenerateToken_DefaultExpiration(t *testing.T) {
 
 	// Verify that the parsed data matches the original data
 	assert.Equal(t, data, *parsedData, "Parsed data should match the original data")
+}
+
+// TestIsApiKey tests if tokens are valid
+func TestIsApiKey(t *testing.T) {
+	tests := []struct {
+		name     string
+		token    string
+		expected bool
+	}{
+		{"Valid API Key", "abcdefgh.123456789", true},
+		{"Invalid - No Dot", "abcdefgh123456789", false},
+		{"Invalid - Dot in Wrong Place", "abc.defgh.123456789", false},
+		{"Invalid - First Part Too Short", "abc.defgh", false},
+		{"Invalid - First Part Too Long", "abcdefghijk.123456789", false},
+		{"Invalid - Empty String", "", false},
+		{"Invalid - Only Dot", ".", false},
+		{"Invalid - Dot at Start", ".abcdefgh", false},
+		{"Invalid - Dot at End", "abcdefgh.", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsApiKey(tt.token)
+			if result != tt.expected {
+				t.Errorf("IsApiKey(%q) = %v, expected %v", tt.token, result, tt.expected)
+			}
+		})
+	}
 }
