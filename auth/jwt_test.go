@@ -6,16 +6,16 @@ import (
 	"time"
 
 	commonJWT "github.com/arqut/common/jwt"
-	"github.com/arqut/common/logger"
+	"github.com/arqut/common/system"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMain(m *testing.M) {
-	// Initialize logger with a simple logger.
+	// Initialize system.Logger with a simple logger.
 	// Adjust the configuration as needed.
 	os.Setenv("SYS_LOG_LEVEL", "INFO")
-	logger.InitLogger("test_logger")
+	system.InitLogger("test_logger")
 
 	// Run the tests.
 	code := m.Run()
