@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 
@@ -16,20 +17,33 @@ func ProxyAuthMiddleware() fiber.Handler {
 		if userID == "" {
 			return api.ErrorUnauthorizedResp(c, "Unauthorized: Missing x-user-id header")
 		}
+
 		// Collect all headers that have the prefix "x-user-".
-		userData := make(map[string]string)
+		userData := make(map[string]interface{})
 		c.Request().Header.VisitAll(func(key, value []byte) {
 			headerKey := string(key)
 			if strings.HasPrefix(headerKey, "X-User-") {
-				key := strings.TrimPrefix(headerKey, "X-User-")
-				userData[strcase.LowerCamelCase(key)] = string(value)
+				key := strcase.LowerCamelCase(strings.TrimPrefix(headerKey, "X-User-"))
+				if key == "id" {
+					id, _ := strconv.Atoi(string(value))
+					userData[key] = uint64(id)
+				} else if key == "isAdmin" {
+					userData[key] = string(value) == "true"
+				} else {
+					userData[key] = string(value)
+				}
 			}
 		})
+
+		// convert to AuthTokenData
+		authData := &AuthTokenData{}
+		jsonStr, _ := json.Marshal(userData)
+		_ = json.Unmarshal(jsonStr, authData)
+
 		// Store the claims in the context so that they can be accessed in downstream handlers.
-		uiID, _ := strconv.Atoi(userID)
-		c.Locals("uiID", uint64(uiID))
+		c.Locals("uiID", authData.ID)
 		c.Locals("usID", userID)
-		c.Locals("userData", userData)
+		c.Locals("authData", authData)
 
 		// Proceed to the next middleware or final handler.
 		return c.Next()
@@ -37,10 +51,8 @@ func ProxyAuthMiddleware() fiber.Handler {
 }
 
 func IsAdmin(c *fiber.Ctx) bool {
-	if userData := c.Locals("userData"); userData != nil {
-		if val, ok := userData.(map[string]interface{})["isAdmin"]; ok && val == "true" {
-			return val.(bool)
-		}
+	if authData := c.Locals("userData"); authData != nil {
+		return authData.(*AuthTokenData).IsAdmin
 	}
 	return false
 }

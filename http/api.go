@@ -5,8 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	netHttp "net/http"
-
-	"github.com/arqut/common/system"
+	"time"
 )
 
 func Get(url string, out interface{}, headers ...string) (err error) {
@@ -26,10 +25,7 @@ func Delete(url string, out interface{}, headers ...string) (err error) {
 }
 
 func Request(method string, url string, data interface{}, out interface{}, headers ...string) (err error) {
-	system.Logger.Infof("http[%s] %s", method, url)
-
 	var req *netHttp.Request
-	client := &netHttp.Client{}
 
 	var in io.Reader
 	var body []byte
@@ -57,7 +53,7 @@ func Request(method string, url string, data interface{}, out interface{}, heade
 		}
 	}
 
-	resp, err := client.Do(req)
+	resp, err := httpClient().Do(req)
 	if err != nil {
 		return
 	}
@@ -71,4 +67,15 @@ func Request(method string, url string, data interface{}, out interface{}, heade
 	err = json.Unmarshal(body, out)
 
 	return
+}
+
+var client *netHttp.Client
+
+func httpClient() *netHttp.Client {
+	if client == nil {
+		client = &netHttp.Client{
+			Timeout: 10 * time.Second, // Adjust as needed
+		}
+	}
+	return client
 }

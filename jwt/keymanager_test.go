@@ -14,10 +14,9 @@ import (
 
 // TestMain sets up the environment before running tests.
 func TestMain(m *testing.M) {
-	// Initialize system.Logger with a simple logger.
+	// Initialize logger with a simple logger.
 	// Adjust the configuration as needed.
 	os.Setenv("SYS_LOG_LEVEL", "INFO")
-	
 	system.InitLogger("test_logger")
 
 	// Run the tests.
@@ -262,98 +261,98 @@ func TestKeyManager_JWE_WithCustomHeaders(t *testing.T) {
 }
 
 func TestKeyManager_RotateKey_InValidationOnlyMode(t *testing.T) {
-    store := NewInMemoryKeyStore()
+	store := NewInMemoryKeyStore()
 
-    // Add a key to the store
-    initialKey := KeyEntry{
-        Key:    []byte("initial_key"),
-        Info:   []byte("initial_info"),
-        Expiry: time.Now().Add(24 * time.Hour),
-    }
-    err := store.SaveKey(initialKey)
-    require.NoError(t, err, "Failed to save initial key to store")
+	// Add a key to the store
+	initialKey := KeyEntry{
+		Key:    []byte("initial_key"),
+		Info:   []byte("initial_info"),
+		Expiry: time.Now().Add(24 * time.Hour),
+	}
+	err := store.SaveKey(initialKey)
+	require.NoError(t, err, "Failed to save initial key to store")
 
-    // Create a validation-only KeyManager
-    kmValidator, err := NewValidationKeyManager(store)
-    require.NoError(t, err, "Failed to create Validation KeyManager")
+	// Create a validation-only KeyManager
+	kmValidator, err := NewValidationKeyManager(store)
+	require.NoError(t, err, "Failed to create Validation KeyManager")
 
-    // Attempt to rotate key in validation-only mode
-    err = kmValidator.rotateKey()
-    assert.Error(t, err, "rotateKey should return an error in validation-only mode")
+	// Attempt to rotate key in validation-only mode
+	err = kmValidator.rotateKey()
+	assert.Error(t, err, "rotateKey should return an error in validation-only mode")
 }
 
 func TestGetCurrentKeys_WithMoreThanFourHistoryKeys(t *testing.T) {
-    // Step 1: Initialize an in-memory key store
-    store := NewInMemoryKeyStore()
+	// Step 1: Initialize an in-memory key store
+	store := NewInMemoryKeyStore()
 
-    // Step 2: Insert 6 keys (1 current + 5 historical)
-    totalKeys := 6
-    now := time.Now()
+	// Step 2: Insert 6 keys (1 current + 5 historical)
+	totalKeys := 6
+	now := time.Now()
 
-    for i := 0; i < totalKeys; i++ {
-        key := KeyEntry{
-            Key:    []byte{byte(i + 1)},          // Simple incremental keys
-            Info:   []byte("info" + strconv.Itoa(i + 1)), // Simple info strings
-            Expiry: now.Add(time.Duration(i) * time.Hour), // Increasing expiry times
-        }
-        if err := store.SaveKey(key); err != nil {
-            t.Fatalf("Failed to save key %d: %v", i, err)
-        }
-    }
+	for i := 0; i < totalKeys; i++ {
+		key := KeyEntry{
+			Key:    []byte{byte(i + 1)},                   // Simple incremental keys
+			Info:   []byte("info" + strconv.Itoa(i+1)),    // Simple info strings
+			Expiry: now.Add(time.Duration(i) * time.Hour), // Increasing expiry times
+		}
+		if err := store.SaveKey(key); err != nil {
+			t.Fatalf("Failed to save key %d: %v", i, err)
+		}
+	}
 
-    // Step 3: Initialize KeyManager with a long rotation period to prevent auto-rotation during test
-    rotationPeriod := 24 * time.Hour
-    km, err := NewIssuerKeyManager(rotationPeriod, store)
-    if err != nil {
-        t.Fatalf("Failed to initialize KeyManager: %v", err)
-    }
-    defer km.Shutdown()
+	// Step 3: Initialize KeyManager with a long rotation period to prevent auto-rotation during test
+	rotationPeriod := 24 * time.Hour
+	km, err := NewIssuerKeyManager(rotationPeriod, store)
+	if err != nil {
+		t.Fatalf("Failed to initialize KeyManager: %v", err)
+	}
+	defer km.Shutdown()
 
-    // Step 4: Invoke GetCurrentKeys
-    keys, err := km.GetCurrentKeys()
-    if err != nil {
-        t.Fatalf("GetCurrentKeys failed: %v", err)
-    }
+	// Step 4: Invoke GetCurrentKeys
+	keys, err := km.GetCurrentKeys()
+	if err != nil {
+		t.Fatalf("GetCurrentKeys failed: %v", err)
+	}
 
-    // Step 5: Assert that exactly 3 keys are returned
-    expectedCount := 3
-    if len(keys) != expectedCount {
-        t.Errorf("Expected %d keys, got %d", expectedCount, len(keys))
-    }
+	// Step 5: Assert that exactly 3 keys are returned
+	expectedCount := 3
+	if len(keys) != expectedCount {
+		t.Errorf("Expected %d keys, got %d", expectedCount, len(keys))
+	}
 
-    // Define the expected keys:
-    // - Current Key: Key5 (last inserted)
-    // - Two most recent historical keys: Key3 and Key4
-    expectedKeys := []KeyEntry{
-        {
-            Key:    []byte{6},           // Key5
-            Info:   []byte("info6"),
-            Expiry: now.Add(5 * time.Hour),
-        },
-        {
-            Key:    []byte{4},           // Key3
-            Info:   []byte("info4"),
-            Expiry: now.Add(3 * time.Hour),
-        },
-        {
-            Key:    []byte{5},           // Key4
-            Info:   []byte("info5"),
-            Expiry: now.Add(4 * time.Hour),
-        },
-    }
+	// Define the expected keys:
+	// - Current Key: Key5 (last inserted)
+	// - Two most recent historical keys: Key3 and Key4
+	expectedKeys := []KeyEntry{
+		{
+			Key:    []byte{6}, // Key5
+			Info:   []byte("info6"),
+			Expiry: now.Add(5 * time.Hour),
+		},
+		{
+			Key:    []byte{4}, // Key3
+			Info:   []byte("info4"),
+			Expiry: now.Add(3 * time.Hour),
+		},
+		{
+			Key:    []byte{5}, // Key4
+			Info:   []byte("info5"),
+			Expiry: now.Add(4 * time.Hour),
+		},
+	}
 
-    // Assert that the returned keys match the expected keys
-    for i, key := range keys {
-        expectedKey := expectedKeys[i]
+	// Assert that the returned keys match the expected keys
+	for i, key := range keys {
+		expectedKey := expectedKeys[i]
 
-        if string(key.Key) != string(expectedKey.Key) {
-            t.Errorf("Key %d: expected Key %v, got %v", i, expectedKey.Key, key.Key)
-        }
-        if string(key.Info) != string(expectedKey.Info) {
-            t.Errorf("Key %d: expected Info %v, got %v", i, expectedKey.Info, key.Info)
-        }
-        if !key.Expiry.Equal(expectedKey.Expiry) {
-            t.Errorf("Key %d: expected Expiry %v, got %v", i, expectedKey.Expiry, key.Expiry)
-        }
-    }
+		if string(key.Key) != string(expectedKey.Key) {
+			t.Errorf("Key %d: expected Key %v, got %v", i, expectedKey.Key, key.Key)
+		}
+		if string(key.Info) != string(expectedKey.Info) {
+			t.Errorf("Key %d: expected Info %v, got %v", i, expectedKey.Info, key.Info)
+		}
+		if !key.Expiry.Equal(expectedKey.Expiry) {
+			t.Errorf("Key %d: expected Expiry %v, got %v", i, expectedKey.Expiry, key.Expiry)
+		}
+	}
 }

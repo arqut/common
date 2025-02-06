@@ -59,7 +59,7 @@ func ConnPostgresDB(conn string, envPrefix string) *gorm.DB {
 	if err != nil {
 		system.Logger.Panic("Failed to connect to database")
 	}
-	system.Logger.Infof("Connect to Postgres Database: '%s'\n", system.Env("DB_NAME"))
+	system.Logger.Infof("Connect to Postgres Database: '%s'", system.Env("DB_NAME"))
 	dbs[conn] = db
 	return db
 }
