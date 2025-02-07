@@ -40,10 +40,7 @@ func ProxyAuthMiddleware() fiber.Handler {
 		jsonStr, _ := json.Marshal(userData)
 		_ = json.Unmarshal(jsonStr, authData)
 
-		// Store the claims in the context so that they can be accessed in downstream handlers.
-		c.Locals("uiID", authData.ID)
-		c.Locals("usID", userID)
-		c.Locals("authData", authData)
+		c.Locals("account", authData)
 
 		// Proceed to the next middleware or final handler.
 		return c.Next()
@@ -51,7 +48,7 @@ func ProxyAuthMiddleware() fiber.Handler {
 }
 
 func IsAdmin(c *fiber.Ctx) bool {
-	if authData := c.Locals("userData"); authData != nil {
+	if authData := c.Locals("account"); authData != nil {
 		return authData.(*AuthTokenData).IsAdmin
 	}
 	return false
