@@ -47,6 +47,15 @@ func ProxyAuthMiddleware() fiber.Handler {
 	}
 }
 
+func IsAdminMiddleware() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if IsAdmin(c) {
+			return c.Next()
+		}
+		return api.ErrorUnauthorizedResp(c, "Unauthorized")
+	}
+}
+
 func IsAdmin(c *fiber.Ctx) bool {
 	if authData := c.Locals("account"); authData != nil {
 		return authData.(*AuthTokenData).IsAdmin
