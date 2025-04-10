@@ -77,7 +77,7 @@ func (s *GormKeyStore) SaveKey(entry KeyEntry) error {
 // GetAllKeys retrieves all saved key entries using GORM.
 func (s *GormKeyStore) GetAllKeys() ([]KeyEntry, error) {
 	var keys []KeyEntry
-	err := s.db.Order("expiry ASC").Limit(3).Find(&keys).Error
+	err := s.db.Order("expiry DESC").Limit(3).Find(&keys).Error
 	return keys, err
 }
 
