@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/log"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwe"
 	"golang.org/x/crypto/hkdf"
@@ -271,6 +272,11 @@ func (km *KeyManager) IssueJWE(payload []byte, opts *JWEOptions) ([]byte, error)
 	}
 
 	km.mu.RLock()
+	
+	log.Info("Try to check if current key expired")
+	log.Info("Time now: ", time.Now())
+	log.Info("Key expiry: ", km.currentKey.Expiry)
+
 	if time.Now().After(km.currentKey.Expiry) {
 		km.mu.RUnlock()
 		if err := km.rotateKey(); err != nil {
