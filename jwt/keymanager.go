@@ -366,3 +366,58 @@ func (km *KeyManager) DecryptJWE(token []byte) ([]byte, error) {
 
 	return nil, fmt.Errorf("failed to decrypt JWE with any known key")
 }
+
+// This need to be rafactored to have generic DecryptJWE with possibility to pass header validators
+// for example: expiration, audience, issuer, etc.
+func (km *KeyManager) DecryptJWEForAudience(token []byte, audience string) ([]byte, error) {
+	km.mu.RLock()
+	defer km.mu.RUnlock()
+
+	msg, err := jwe.Parse(token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JWE: %v", err)
+	}
+
+	headers := msg.ProtectedHeaders()
+	var expiration float64
+	if err := headers.Get("exp", &expiration); err == nil {
+		expTime := time.Unix(int64(expiration), 0)
+		if time.Now().After(expTime) {
+			return nil, fmt.Errorf("token has expired")
+		}
+	}
+
+	var audienceStr string
+	if err := headers.Get("aud", &audienceStr); err != nil {
+		return nil, fmt.Errorf("failed to get audience from headers: %v", err)
+	}
+
+	if audienceStr != audience {
+		return nil, fmt.Errorf("invalid audience")
+	}
+
+	var saltStr string
+	if err := headers.Get("salt", &saltStr); err != nil {
+		return nil, fmt.Errorf("failed to get salt from headers: %v", err)
+	}
+
+	saltBytes, err := base64.StdEncoding.DecodeString(saltStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode salt: %v", err)
+	}
+
+	allKeys := append([]KeyEntry{km.currentKey}, km.keyHistory...)
+
+	for _, keyEntry := range allKeys {
+		derivedKey, err := deriveKey(keyEntry.Key, saltBytes, keyEntry.Info)
+		if err != nil {
+			continue
+		}
+		decrypted, err := jwe.Decrypt(token, jwe.WithKey(jwa.DIRECT(), derivedKey))
+		if err == nil {
+			return decrypted, nil
+		}
+	}
+
+	return nil, fmt.Errorf("failed to decrypt JWE with any known key")
+}
