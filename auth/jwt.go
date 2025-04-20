@@ -67,6 +67,32 @@ func ParseToken(keyManager *commonJWT.KeyManager, token string) (*AuthTokenData,
 	return data, nil
 }
 
+func ParseTokenForAudience(keyManager *commonJWT.KeyManager, token string, audience string) (*AuthTokenData, error) {
+	if token == "" {
+		return nil, fmt.Errorf("empty token")
+	}
+
+	decrypted, err := keyManager.DecryptJWEForAudience([]byte(token), audience)
+	if err != nil {
+		keyManager.RefreshKeys()
+		decrypted, err = keyManager.DecryptJWE([]byte(token))
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt token: %w", err)
+		}
+	}
+
+	dec := json.NewDecoder(bytes.NewReader(decrypted))
+
+	data := &AuthTokenData{}
+
+	// Decode the JSON into the types.Map
+	if err := dec.Decode(data); err != nil {
+		return nil, fmt.Errorf("failed to decode token payload: %w", err)
+	}
+
+	return data, nil
+}
+
 func IsApiKey(token string) bool {
 	dotIndex := strings.IndexByte(token, '.')
 	if dotIndex == -1 || dotIndex != 8 || dotIndex == len(token)-1 {
