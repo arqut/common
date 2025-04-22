@@ -219,6 +219,13 @@ func (km *KeyManager) GetCurrentKeys() ([]KeyEntry, error) {
 }
 
 func (km *KeyManager) GetCurrentKeysAPIHandler(c *fiber.Ctx) error {
+
+	log.Info("KeyManager: GetCurrentKeysAPIHandler called")
+	headers := c.GetReqHeaders()
+	for key, value := range headers {
+		log.Infof("Header: %s = %s", key, value)
+	}
+
 	keys, err := km.GetCurrentKeys()
 	if err != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
