@@ -12,6 +12,7 @@ type AuthTokenData struct {
 	Email     string     `json:"email" gorm:"type:varchar(128);uniqueIndex"`
 	AvatarUrl string     `json:"avatarUrl" gorm:"type:varchar(256)"`
 	IsAdmin   bool       `json:"isAdmin"`
+	CreatedAt uint64     `json:"createdAt"`
 	Meta      *types.Map `json:"meta,omitempty"`
 }
 
