@@ -7,6 +7,7 @@ import (
 
 	"github.com/arqut/common/api"
 	"github.com/arqut/common/strcase"
+	"github.com/arqut/common/types"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -19,7 +20,7 @@ func ProxyAuthMiddleware() fiber.Handler {
 		}
 
 		// Collect all headers that have the prefix "x-user-".
-		userData := make(map[string]interface{})
+		userData := make(map[string]any)
 		c.Request().Header.VisitAll(func(key, value []byte) {
 			headerKey := string(key)
 			if strings.HasPrefix(headerKey, "X-User-") {
@@ -39,6 +40,11 @@ func ProxyAuthMiddleware() fiber.Handler {
 		authData := &AuthTokenData{}
 		jsonStr, _ := json.Marshal(userData)
 		_ = json.Unmarshal(jsonStr, authData)
+
+		// keep token
+		authData.Meta = &types.Map{
+			"token": ExtractToken(c, "header:Authorization,query:auth_token,cookie:jwt"),
+		}
 
 		c.Locals("account", authData)
 

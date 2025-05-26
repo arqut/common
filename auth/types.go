@@ -27,3 +27,11 @@ type AuthRefreshResponse struct {
 	Data    string        `json:"data,omitempty"`
 	Error   *api.ApiError `json:"error,omitempty"`
 }
+
+func (acc *AuthTokenData) GetAuthToken() string {
+	meta := *acc.Meta
+	if token, ok := meta["token"]; ok {
+		return token.(string)
+	}
+	return ""
+}
