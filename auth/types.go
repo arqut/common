@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"fmt"
+
 	"github.com/arqut/common/api"
 	"github.com/arqut/common/types"
 )
@@ -26,6 +28,10 @@ type AuthRefreshResponse struct {
 	Success bool          `json:"success"`
 	Data    string        `json:"data,omitempty"`
 	Error   *api.ApiError `json:"error,omitempty"`
+}
+
+func (acc *AuthTokenData) SID() string {
+	return fmt.Sprintf("%d", acc.ID)
 }
 
 func (acc *AuthTokenData) GetAuthToken() string {

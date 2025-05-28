@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 
@@ -11,17 +12,26 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func ProxyAuthMiddleware() fiber.Handler {
-	return func(c *fiber.Ctx) error {
+func ProxyAuthMiddleware(finalized ...bool) fiber.Handler {
+	isFinalized := true
+	if len(finalized) > 0 {
+		isFinalized = finalized[0]
+	}
+
+	return func(ctx *fiber.Ctx) error {
 		// Check if the required header "x-user-id" exists.
-		userID := c.Get("x-user-id")
+		userID := ctx.Get("x-user-id")
 		if userID == "" {
-			return api.ErrorUnauthorizedResp(c, "Unauthorized: Missing x-user-id header")
+			if isFinalized {
+				return api.ErrorUnauthorizedResp(ctx, "Unauthorized: Missing x-user-id header")
+			} else {
+				return errors.New("missing x-user-id header")
+			}
 		}
 
 		// Collect all headers that have the prefix "x-user-".
 		userData := make(map[string]any)
-		c.Request().Header.VisitAll(func(key, value []byte) {
+		ctx.Request().Header.VisitAll(func(key, value []byte) {
 			headerKey := string(key)
 			if strings.HasPrefix(headerKey, "X-User-") {
 				key := strcase.LowerCamelCase(strings.TrimPrefix(headerKey, "X-User-"))
@@ -37,34 +47,36 @@ func ProxyAuthMiddleware() fiber.Handler {
 		})
 
 		// convert to AuthTokenData
-		authData := &AuthTokenData{}
+		acc := &AuthTokenData{}
 		jsonStr, _ := json.Marshal(userData)
-		_ = json.Unmarshal(jsonStr, authData)
+		_ = json.Unmarshal(jsonStr, acc)
 
 		// keep token
-		authData.Meta = &types.Map{
-			"token": ExtractToken(c, "header:Authorization,query:auth_token,cookie:jwt"),
+		token := ExtractToken(ctx, "header:Authorization,query:auth_token,cookie:jwt")
+		acc.Meta = &types.Map{
+			"token": token,
 		}
 
-		c.Locals("account", authData)
+		ctx.Locals("account", acc)
+		ctx.Locals("authToken", token)
 
 		// Proceed to the next middleware or final handler.
-		return c.Next()
+		return ctx.Next()
 	}
 }
 
 func IsAdminMiddleware() fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		if IsAdmin(c) {
-			return c.Next()
+	return func(ctx *fiber.Ctx) error {
+		if IsAdmin(ctx) {
+			return ctx.Next()
 		}
-		return api.ErrorUnauthorizedResp(c, "Unauthorized")
+		return api.ErrorUnauthorizedResp(ctx, "Unauthorized")
 	}
 }
 
-func IsAdmin(c *fiber.Ctx) bool {
-	if authData := c.Locals("account"); authData != nil {
-		return authData.(*AuthTokenData).IsAdmin
+func IsAdmin(ctx *fiber.Ctx) bool {
+	if acc := ctx.Locals("account"); acc != nil {
+		return acc.(*AuthTokenData).IsAdmin
 	}
 	return false
 }
