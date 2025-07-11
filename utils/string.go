@@ -41,7 +41,7 @@ func StringToInt(val string) int {
 	return i
 }
 
-func ToString(data interface{}) string {
+func ToString(data any) string {
 	switch data.(type) {
 	case int:
 		return fmt.Sprintf("%d", data)
