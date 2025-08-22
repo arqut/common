@@ -23,6 +23,7 @@ type KeyEntry struct {
 
 // KeyStore defines methods for persisting and retrieving key entries.
 type KeyStore interface {
+	Clear() error
 	SaveKey(entry KeyEntry) error
 	GetAllKeys() ([]KeyEntry, error)
 }
@@ -36,6 +37,13 @@ type InMemoryKeyStore struct {
 // NewInMemoryKeyStore initializes a new in-memory key store.
 func NewInMemoryKeyStore() *InMemoryKeyStore {
 	return &InMemoryKeyStore{}
+}
+
+func (s *InMemoryKeyStore) Clear() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.keys = []KeyEntry{}
+	return nil
 }
 
 // SaveKey saves a key entry into memory.
@@ -67,6 +75,10 @@ type GormKeyStore struct {
 func NewGormKeyStore(db *gorm.DB) *GormKeyStore {
 	db.AutoMigrate(&KeyEntry{})
 	return &GormKeyStore{db: db}
+}
+
+func (s *GormKeyStore) Clear() error {
+	return s.db.Delete(&KeyEntry{}, "1=1").Error
 }
 
 // SaveKey saves a key entry using GORM.

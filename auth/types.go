@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/arqut/common/api"
+	"github.com/arqut/common/http"
+	"github.com/arqut/common/system"
 	"github.com/arqut/common/types"
 )
 
@@ -40,4 +42,31 @@ func (acc *AuthTokenData) GetAuthToken() string {
 		return token.(string)
 	}
 	return ""
+}
+
+func (acc *AuthTokenData) SendNotification(targetIds []string, title, body string, data map[string]string) (*api.ApiResponse, error) {
+	authApi := system.Env("AUTH_API")
+	if authApi == "" {
+		return nil, fmt.Errorf("auth api is missing")
+	}
+
+	url := authApi + "/notification/send"
+
+	reqData := map[string]any{
+		"to":    targetIds,
+		"title": title,
+		"body":  body,
+	}
+
+	if data != nil {
+		reqData["data"] = data
+		reqData["action"] = "OPEN_ITEM"
+	}
+
+	res := &api.ApiResponse{}
+	if err := http.Post(url, reqData, res, "Authorization", "Bearer "+acc.GetAuthToken()); err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
