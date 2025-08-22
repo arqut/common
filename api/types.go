@@ -23,14 +23,14 @@ type ApiResponseMeta struct {
 }
 
 type ApiError struct {
-	Code    int         `json:"code,omitempty"`
-	Message string      `json:"message,omitempty"`
-	Detail  interface{} `json:"detail,omitempty"`
+	Code    int    `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
+	Detail  any    `json:"detail,omitempty"`
 }
 
 type ApiResponse struct {
 	Success bool             `json:"success"`
-	Data    interface{}      `json:"data,omitempty"`
+	Data    any              `json:"data,omitempty"`
 	Error   *ApiError        `json:"error,omitempty"`
 	Meta    *ApiResponseMeta `json:"meta,omitempty"`
 }

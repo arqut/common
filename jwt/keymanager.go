@@ -272,7 +272,7 @@ func (km *KeyManager) IssueJWE(payload []byte, opts *JWEOptions) ([]byte, error)
 	}
 
 	km.mu.RLock()
-	
+
 	log.Info("Try to check if current key expired")
 	log.Info("Time now: ", time.Now())
 	log.Info("Key expiry: ", km.currentKey.Expiry)
@@ -365,4 +365,8 @@ func (km *KeyManager) DecryptJWE(token []byte) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("failed to decrypt JWE with any known key")
+}
+
+func (km *KeyManager) Clear() error {
+	return km.store.Clear()
 }
